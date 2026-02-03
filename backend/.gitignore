@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtualenv
+.venv/
+venv/
+
+# Pytest / tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Mac
+.DS_Store
+
+# App storage outputs
+storage/
