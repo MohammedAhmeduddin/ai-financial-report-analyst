@@ -1,19 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * Product-style UI:
- * - Base & Compare upload panels
- * - Run pipeline: /upload -> /extract -> /metrics
- * - Compare variance endpoint
- * - Ask endpoint with compare_upload_id
+ * Demo Mode:
+ * - Toggle in header
+ * - Preloads base/compare metrics, variance, answer, citations
+ * - Disables upload + pipeline buttons while demo is ON
+ * - When demo is OFF: normal backend flow (upload -> extract -> metrics -> variance -> ask)
  *
- * Assumptions about backend routes:
- * - POST /upload (multipart form field: file) -> { upload_id }
+ * Backend routes assumed:
+ * - POST /upload (multipart field: file) -> { upload_id }
  * - POST /extract/{upload_id}
  * - POST /metrics/{upload_id}
  * - POST /variance/{base}/{compare}
  * - POST /ask/{base} with JSON { question, compare_upload_id }
- * - GET  /health -> 200 OK (any JSON/text is fine)
+ * - GET /health (or POST /health depending on your API; here we use GET)
  */
 
 function cx(...classes) {
@@ -24,6 +24,8 @@ function formatNumber(n) {
   if (typeof n !== "number" || Number.isNaN(n)) return "-";
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
+
+/** ---------- UI atoms ---------- */
 
 function Badge({ children, tone = "neutral" }) {
   const tones = {
@@ -45,11 +47,23 @@ function Badge({ children, tone = "neutral" }) {
   );
 }
 
-function StatusChip({ label, value, tone = "neutral" }) {
+function Chip({ label, value, tone = "neutral" }) {
+  const tones = {
+    neutral: "border-zinc-800 bg-zinc-950/40",
+    success: "border-emerald-900/50 bg-emerald-950/20",
+    warning: "border-amber-900/50 bg-amber-950/20",
+    danger: "border-rose-900/50 bg-rose-950/20",
+    info: "border-sky-900/50 bg-sky-950/20",
+  };
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/40 px-3 py-1.5 text-xs">
+    <div
+      className={cx(
+        "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
+        tones[tone] || tones.neutral,
+      )}
+    >
       <span className="text-zinc-400">{label}</span>
-      <Badge tone={tone}>{value}</Badge>
+      <span className="text-zinc-100 font-medium">{value}</span>
     </div>
   );
 }
@@ -98,6 +112,40 @@ function Button({ children, variant = "primary", className, ...props }) {
   );
 }
 
+function Toggle({ enabled, onChange, label }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!enabled)}
+      className={cx(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
+        enabled
+          ? "border-emerald-900/60 bg-emerald-950/20"
+          : "border-zinc-800 bg-zinc-950/40",
+      )}
+      aria-pressed={enabled}
+    >
+      <span
+        className={cx(
+          "h-4 w-7 rounded-full p-0.5 transition",
+          enabled ? "bg-emerald-800/40" : "bg-zinc-800/60",
+        )}
+      >
+        <span
+          className={cx(
+            "block h-3 w-3 rounded-full bg-white transition",
+            enabled ? "translate-x-3.5" : "translate-x-0",
+          )}
+        />
+      </span>
+      <span className="text-zinc-200">{label}</span>
+      <Badge tone={enabled ? "success" : "neutral"}>
+        {enabled ? "On" : "Off"}
+      </Badge>
+    </button>
+  );
+}
+
 function SmallLabel({ children }) {
   return <div className="text-xs font-medium text-zinc-400">{children}</div>;
 }
@@ -133,6 +181,8 @@ function KPI({ label, value, sub, tone = "neutral" }) {
   );
 }
 
+/** ---------- Backend helpers ---------- */
+
 async function postJSON(url, body) {
   const res = await fetch(url, {
     method: "POST",
@@ -163,15 +213,10 @@ async function uploadPDF(file) {
     const txt = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${txt}`);
   }
-  return res.json(); // { upload_id, ... }
+  return res.json();
 }
 
-async function pingHealth() {
-  // Works whether backend returns JSON or plain text.
-  const res = await fetch("/health", { method: "GET" });
-  if (!res.ok) throw new Error(`Health check failed (${res.status})`);
-  return true;
-}
+/** ---------- Tables ---------- */
 
 function MetricTable({ metrics }) {
   const labels = {
@@ -280,7 +325,7 @@ function Citations({ citations }) {
     <div className="space-y-3">
       {citations.map((c) => (
         <div
-          key={`${c.upload_id}:${c.chunk_id ?? c.page_start ?? Math.random()}`}
+          key={`${c.upload_id}:${c.chunk_id}`}
           className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4"
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -288,14 +333,12 @@ function Citations({ citations }) {
             <span className="text-xs text-zinc-300 break-all">
               {c.upload_id}
             </span>
-            {c.page_start != null && c.page_end != null ? (
-              <Badge>
-                pages {c.page_start}–{c.page_end}
-              </Badge>
-            ) : null}
+            <Badge>
+              pages {c.page_start}–{c.page_end}
+            </Badge>
           </div>
           <div className="mt-2 text-sm leading-relaxed text-zinc-200">
-            {c.text_preview || c.text || JSON.stringify(c)}
+            {c.text_preview}
           </div>
         </div>
       ))}
@@ -303,36 +346,88 @@ function Citations({ citations }) {
   );
 }
 
-/** A simple “pro” logo as inline SVG (no extra library needed) */
-function AppLogo() {
-  return (
-    <div className="h-11 w-11 rounded-2xl border border-zinc-800 bg-zinc-950/40 grid place-items-center shadow-sm">
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        className="text-zinc-100"
-        aria-hidden="true"
-      >
-        <path
-          d="M12 2l8.5 20h-2.6l-2-5H8.1l-2 5H3.5L12 2z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M9 14h6L12 6.5 9 14z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </div>
-  );
-}
+/** ---------- Demo Data ---------- */
+
+const DEMO = {
+  baseUploadId: "demo-base-fy24q4-9f3a",
+  compareUploadId: "demo-compare-fy25q4-7b21",
+  baseMetrics: {
+    revenue: 69958,
+    gross_profit: 43879,
+    operating_income: 29591,
+    other_income_expense_net: 19,
+    pre_tax_income: 29610,
+    income_taxes: 14874,
+    net_income: 14736,
+    total_assets: 364980,
+    total_liabilities: 308030,
+  },
+  compareMetrics: {
+    revenue: 73716,
+    gross_profit: 48341,
+    operating_income: 32427,
+    other_income_expense_net: 377,
+    pre_tax_income: 32804,
+    income_taxes: 5338,
+    net_income: 27466,
+    total_assets: 359241,
+    total_liabilities: 285508,
+  },
+  variance: {
+    net_income_change: 12730,
+    explained_pct: 100.0,
+    drivers_list: [
+      { name: "other", impact: 9894.0, pct_of_change: 77.72 },
+      { name: "revenue_impact", impact: 2357.09, pct_of_change: 18.52 },
+      { name: "margin_impact", impact: 2104.91, pct_of_change: 16.54 },
+      { name: "opex_impact", impact: -1626.0, pct_of_change: -12.77 },
+    ],
+    other_breakdown: {
+      tax_impact: 9536.0,
+      other_income_expense_impact: 358.0,
+      remaining_other_impact: 0.0,
+    },
+  },
+  question:
+    "Why did other change so much? Was it taxes or other income/expense?",
+  answer: `Net income increased by 12,730.00 when comparing demo-base-fy24q4-9f3a vs demo-compare-fy25q4-7b21.
+Drivers explain about 100.00% of the change.
+Top drivers:
+- Other (below-the-line): +9,894.00
+- Revenue impact: +2,357.09
+- Margin impact: +2,104.91
+
+Breakdown of Other (below-the-line) (+9,894.00):
+- Taxes impact: +9,536.00
+- Other income/(expense), net impact: +358.00
+- Remaining (interest/one-offs/other): +0.00
+
+Reconciliation:
+explained_total=12,730.00, residual=0.00.`,
+  citations: [
+    {
+      upload_id: "demo-base-fy24q4-9f3a",
+      chunk_id: "income-statement-1",
+      page_start: 1,
+      page_end: 3,
+      text_preview:
+        "CONDENSED CONSOLIDATED STATEMENTS OF OPERATIONS (Unaudited). Revenue, gross profit, operating income, other income/(expense), net, income before provision for income taxes, provision for income taxes, and net income.",
+    },
+    {
+      upload_id: "demo-compare-fy25q4-7b21",
+      chunk_id: "income-statement-1",
+      page_start: 1,
+      page_end: 3,
+      text_preview:
+        "CONDENSED CONSOLIDATED STATEMENTS OF OPERATIONS (Unaudited). Revenue and profitability improved; taxes and other income/(expense) changed meaningfully, impacting net income year-over-year.",
+    },
+  ],
+};
 
 export default function App() {
+  // Demo mode toggle
+  const [demoMode, setDemoMode] = useState(false);
+
   const [baseFile, setBaseFile] = useState(null);
   const [compareFile, setCompareFile] = useState(null);
 
@@ -351,40 +446,16 @@ export default function App() {
   const [answer, setAnswer] = useState(null);
   const [citations, setCitations] = useState([]);
 
-  const [question, setQuestion] = useState(
-    "Why did other change so much? Was it taxes or other income/expense?",
-  );
-
+  const [question, setQuestion] = useState(DEMO.question);
   const [error, setError] = useState(null);
 
-  // ====== Status chips state ======
-  const [backendOk, setBackendOk] = useState(null); // null=unknown, true=ok, false=down
+  // backend health
+  const [backendOk, setBackendOk] = useState(null); // null = unknown, true/false after check
+
+  const canRunBase = Boolean(baseFile);
+  const canRunCompare = Boolean(compareFile);
   const canCompare = Boolean(base.uploadId && compare.uploadId);
 
-  const mode = canCompare ? "Compare" : "Single";
-  const uploadsReady = canCompare ? "Ready" : "Missing";
-
-  useEffect(() => {
-    let alive = true;
-
-    async function tick() {
-      try {
-        await pingHealth();
-        if (alive) setBackendOk(true);
-      } catch {
-        if (alive) setBackendOk(false);
-      }
-    }
-
-    tick();
-    const id = setInterval(tick, 4000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, []);
-
-  // ====== KPIs ======
   const baseRevenue = base.metrics?.revenue;
   const compareRevenue = compare.metrics?.revenue;
 
@@ -403,7 +474,84 @@ export default function App() {
       ? `${variance.explained_pct.toFixed(2)}% explained`
       : "Run variance to compute";
 
+  // Mode chip (Compare if both IDs exist, else Single)
+  const modeLabel = canCompare
+    ? "Compare"
+    : base.uploadId
+      ? "Single"
+      : "Single";
+
+  // Uploads chip (Ready if both metrics exist in compare mode)
+  const uploadsReady =
+    canCompare && base.metrics && compare.metrics
+      ? true
+      : !canCompare && base.metrics
+        ? true
+        : false;
+
+  /** -------- health check loop -------- */
+  useEffect(() => {
+    let alive = true;
+
+    async function ping() {
+      try {
+        // If your backend uses POST /health instead of GET, change method here.
+        const res = await fetch("/health", { method: "POST" });
+        if (!alive) return;
+        setBackendOk(res.ok);
+      } catch {
+        if (!alive) return;
+        setBackendOk(false);
+      }
+    }
+
+    ping();
+    const t = setInterval(ping, 4000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  /** -------- demo mode preload / reset -------- */
+  useEffect(() => {
+    setError(null);
+
+    if (demoMode) {
+      // preload everything
+      setBaseFile(null);
+      setCompareFile(null);
+
+      setBase({
+        uploadId: DEMO.baseUploadId,
+        metrics: DEMO.baseMetrics,
+        status: "ready",
+      });
+      setCompare({
+        uploadId: DEMO.compareUploadId,
+        metrics: DEMO.compareMetrics,
+        status: "ready",
+      });
+
+      setVariance(DEMO.variance);
+      setQuestion(DEMO.question);
+      setAnswer(DEMO.answer);
+      setCitations(DEMO.citations);
+      return;
+    }
+
+    // leaving demo mode: reset UI to real state (keeps question)
+    setBase({ uploadId: null, metrics: null, status: "idle" });
+    setCompare({ uploadId: null, metrics: null, status: "idle" });
+    setVariance(null);
+    setAnswer(null);
+    setCitations([]);
+  }, [demoMode]);
+
+  /** -------- real backend flows -------- */
+
   async function runPipeline(which) {
+    if (demoMode) return;
     setError(null);
 
     const file = which === "base" ? baseFile : compareFile;
@@ -428,6 +576,13 @@ export default function App() {
   }
 
   async function runVariance() {
+    if (demoMode) {
+      // In demo mode, variance is already loaded — but re-apply to feel interactive
+      setError(null);
+      setVariance(DEMO.variance);
+      return;
+    }
+
     setError(null);
     setVariance(null);
     setAnswer(null);
@@ -444,6 +599,15 @@ export default function App() {
   }
 
   async function runAsk() {
+    if (demoMode) {
+      // instant answer
+      setError(null);
+      setAnswer(DEMO.answer);
+      setCitations(DEMO.citations);
+      setVariance(DEMO.variance);
+      return;
+    }
+
     setError(null);
     setAnswer(null);
     setCitations([]);
@@ -472,9 +636,6 @@ export default function App() {
     return <Badge>{status}</Badge>;
   }
 
-  const canRunBase = Boolean(baseFile);
-  const canRunCompare = Boolean(compareFile);
-
   const basePipelineLabel =
     base.status === "uploading"
       ? "Uploading…"
@@ -493,22 +654,19 @@ export default function App() {
           ? "Computing metrics…"
           : "Extract metrics";
 
-  // ====== Status chip tones ======
-  const backendTone =
+  const backendChipTone =
     backendOk == null ? "neutral" : backendOk ? "success" : "danger";
-  const backendText =
-    backendOk == null ? "Checking…" : backendOk ? "Connected" : "Down";
-
-  const modeTone = mode === "Compare" ? "info" : "neutral";
-  const uploadsTone = uploadsReady === "Ready" ? "success" : "warning";
 
   return (
     <div className="min-h-screen">
       {/* Top bar */}
       <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
-            <AppLogo />
+          <div className="flex items-center gap-3">
+            {/* Your logo is already in CSS/markup in your screenshot; keep using this placeholder */}
+            <div className="h-9 w-9 rounded-xl bg-white/10 border border-white/10 text-zinc-100 grid place-items-center font-black">
+              A
+            </div>
             <div>
               <div className="text-sm font-semibold text-zinc-100">
                 AI Financial Report Analyst
@@ -519,18 +677,33 @@ export default function App() {
             </div>
           </div>
 
-          {/* ✅ Replaces “Hybrid / Finance+AI” with real status chips */}
-          <div className="hidden items-center gap-2 sm:flex">
-            <StatusChip
+          {/* Right-side: status chips + demo toggle */}
+          <div className="flex items-center gap-2">
+            <Chip
               label="Backend"
-              value={backendText}
-              tone={backendTone}
+              value={
+                backendOk == null
+                  ? "Checking…"
+                  : backendOk
+                    ? "Connected"
+                    : "Down"
+              }
+              tone={backendChipTone}
             />
-            <StatusChip label="Mode" value={mode} tone={modeTone} />
-            <StatusChip
+            <Chip
+              label="Mode"
+              value={modeLabel}
+              tone={canCompare ? "info" : "neutral"}
+            />
+            <Chip
               label="Uploads"
-              value={uploadsReady}
-              tone={uploadsTone}
+              value={uploadsReady ? "Ready" : "Missing"}
+              tone={uploadsReady ? "success" : "warning"}
+            />
+            <Toggle
+              enabled={demoMode}
+              onChange={setDemoMode}
+              label="Demo mode"
             />
           </div>
         </div>
@@ -593,7 +766,11 @@ export default function App() {
           {/* Base */}
           <Card
             title="Base period"
-            subtitle="Upload a PDF (e.g., FY24 Q4) and extract metrics."
+            subtitle={
+              demoMode
+                ? "Demo mode is ON — data is preloaded."
+                : "Upload a PDF (e.g., FY24 Q4) and extract metrics."
+            }
             right={statusBadge(base.status)}
           >
             <div className="space-y-4">
@@ -602,8 +779,14 @@ export default function App() {
                 <input
                   type="file"
                   accept="application/pdf"
+                  disabled={demoMode}
                   onChange={(e) => setBaseFile(e.target.files?.[0] || null)}
-                  className="mt-2 block w-full text-sm text-zinc-300 file:mr-4 file:rounded-xl file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-100 hover:file:bg-zinc-700"
+                  className={cx(
+                    "mt-2 block w-full text-sm text-zinc-300",
+                    "file:mr-4 file:rounded-xl file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-100",
+                    "hover:file:bg-zinc-700",
+                    demoMode && "opacity-50 cursor-not-allowed",
+                  )}
                 />
               </div>
 
@@ -616,6 +799,7 @@ export default function App() {
                 <Button
                   onClick={() => runPipeline("base")}
                   disabled={
+                    demoMode ||
                     !canRunBase ||
                     ["uploading", "extracting", "metrics"].includes(base.status)
                   }
@@ -624,6 +808,7 @@ export default function App() {
                 </Button>
                 <Button
                   variant="secondary"
+                  disabled={demoMode}
                   onClick={() =>
                     setBase({ uploadId: null, metrics: null, status: "idle" })
                   }
@@ -646,7 +831,11 @@ export default function App() {
           {/* Compare */}
           <Card
             title="Compare period"
-            subtitle="Upload the comparison PDF (e.g., FY25 Q4) and extract metrics."
+            subtitle={
+              demoMode
+                ? "Demo mode is ON — data is preloaded."
+                : "Upload the comparison PDF (e.g., FY25 Q4) and extract metrics."
+            }
             right={statusBadge(compare.status)}
           >
             <div className="space-y-4">
@@ -655,8 +844,14 @@ export default function App() {
                 <input
                   type="file"
                   accept="application/pdf"
+                  disabled={demoMode}
                   onChange={(e) => setCompareFile(e.target.files?.[0] || null)}
-                  className="mt-2 block w-full text-sm text-zinc-300 file:mr-4 file:rounded-xl file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-100 hover:file:bg-zinc-700"
+                  className={cx(
+                    "mt-2 block w-full text-sm text-zinc-300",
+                    "file:mr-4 file:rounded-xl file:border-0 file:bg-zinc-800 file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-100",
+                    "hover:file:bg-zinc-700",
+                    demoMode && "opacity-50 cursor-not-allowed",
+                  )}
                 />
               </div>
 
@@ -669,6 +864,7 @@ export default function App() {
                 <Button
                   onClick={() => runPipeline("compare")}
                   disabled={
+                    demoMode ||
                     !canRunCompare ||
                     ["uploading", "extracting", "metrics"].includes(
                       compare.status,
@@ -679,6 +875,7 @@ export default function App() {
                 </Button>
                 <Button
                   variant="secondary"
+                  disabled={demoMode}
                   onClick={() =>
                     setCompare({
                       uploadId: null,
@@ -723,7 +920,10 @@ export default function App() {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={runVariance} disabled={!canCompare}>
+                <Button
+                  onClick={runVariance}
+                  disabled={!canCompare && !demoMode}
+                >
                   Compute variance
                 </Button>
               </div>
@@ -805,7 +1005,7 @@ export default function App() {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={runAsk} disabled={!canCompare}>
+                <Button onClick={runAsk} disabled={!canCompare && !demoMode}>
                   Generate answer
                 </Button>
                 <Button

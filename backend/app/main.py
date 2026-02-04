@@ -9,11 +9,6 @@ from app.api.metrics import router as metrics_router
 from app.api.variance import router as variance_router
 from app.api.ask import router as ask_router
 
-
-
-
-
-
 def create_app() -> FastAPI:
     setup_logging()
 
@@ -27,18 +22,10 @@ def create_app() -> FastAPI:
     app.include_router(variance_router)
     app.include_router(ask_router)
 
-
-
-
-
-
-
-    @app.get("/health")
+    @app.api_route("/health", methods=["GET", "POST"])
     def health():
         return {"status": "ok", "app": settings.app_name, "env": settings.env}
 
     return app
-
-
 
 app = create_app()
