@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 /**
  * Product-style UI:
@@ -7,12 +7,13 @@ import React, { useMemo, useState } from "react";
  * - Compare variance endpoint
  * - Ask endpoint with compare_upload_id
  *
- * Assumptions about backend routes (based on your curl):
+ * Assumptions about backend routes:
  * - POST /upload (multipart form field: file) -> { upload_id }
  * - POST /extract/{upload_id}
  * - POST /metrics/{upload_id}
  * - POST /variance/{base}/{compare}
  * - POST /ask/{base} with JSON { question, compare_upload_id }
+ * - GET  /health -> 200 OK (any JSON/text is fine)
  */
 
 function cx(...classes) {
@@ -41,6 +42,15 @@ function Badge({ children, tone = "neutral" }) {
     >
       {children}
     </span>
+  );
+}
+
+function StatusChip({ label, value, tone = "neutral" }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/40 px-3 py-1.5 text-xs">
+      <span className="text-zinc-400">{label}</span>
+      <Badge tone={tone}>{value}</Badge>
+    </div>
   );
 }
 
@@ -77,6 +87,7 @@ function Button({ children, variant = "primary", className, ...props }) {
       className={cx(
         "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition",
         "focus:outline-none focus:ring-2 focus:ring-white/15",
+        "disabled:cursor-not-allowed disabled:opacity-60",
         variants[variant] || variants.primary,
         className,
       )}
@@ -98,6 +109,26 @@ function KeyValue({ label, value }) {
       <div className="mt-1 text-sm font-semibold text-zinc-100 break-all">
         {value ?? "-"}
       </div>
+    </div>
+  );
+}
+
+function KPI({ label, value, sub, tone = "neutral" }) {
+  const tones = {
+    neutral: "border-zinc-800 bg-zinc-950/30",
+    success: "border-emerald-900/50 bg-emerald-950/20",
+    warning: "border-amber-900/50 bg-amber-950/15",
+    danger: "border-rose-900/50 bg-rose-950/20",
+    info: "border-sky-900/50 bg-sky-950/15",
+  };
+
+  return (
+    <div className={cx("rounded-2xl border p-4", tones[tone] || tones.neutral)}>
+      <div className="text-xs text-zinc-400">{label}</div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight text-zinc-100">
+        {value}
+      </div>
+      {sub ? <div className="mt-1 text-xs text-zinc-500">{sub}</div> : null}
     </div>
   );
 }
@@ -135,7 +166,26 @@ async function uploadPDF(file) {
   return res.json(); // { upload_id, ... }
 }
 
+async function pingHealth() {
+  // Works whether backend returns JSON or plain text.
+  const res = await fetch("/health", { method: "GET" });
+  if (!res.ok) throw new Error(`Health check failed (${res.status})`);
+  return true;
+}
+
 function MetricTable({ metrics }) {
+  const labels = {
+    revenue: "Revenue",
+    gross_profit: "Gross profit",
+    operating_income: "Operating income",
+    other_income_expense_net: "Other income/(expense), net",
+    pre_tax_income: "Pre-tax income",
+    income_taxes: "Income taxes",
+    net_income: "Net income",
+    total_assets: "Total assets",
+    total_liabilities: "Total liabilities",
+  };
+
   const rows = useMemo(() => {
     if (!metrics) return [];
     const order = [
@@ -169,7 +219,7 @@ function MetricTable({ metrics }) {
           {rows.map((r) => (
             <tr key={r.k} className="hover:bg-zinc-900/40">
               <td className="px-4 py-3 text-sm text-zinc-200">
-                {r.k.replaceAll("_", " ")}
+                {labels[r.k] || r.k.replaceAll("_", " ")}
               </td>
               <td className="px-4 py-3 text-right text-sm font-medium text-zinc-100">
                 {formatNumber(r.v)}
@@ -230,7 +280,7 @@ function Citations({ citations }) {
     <div className="space-y-3">
       {citations.map((c) => (
         <div
-          key={`${c.upload_id}:${c.chunk_id}`}
+          key={`${c.upload_id}:${c.chunk_id ?? c.page_start ?? Math.random()}`}
           className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4"
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -238,15 +288,46 @@ function Citations({ citations }) {
             <span className="text-xs text-zinc-300 break-all">
               {c.upload_id}
             </span>
-            <Badge>
-              pages {c.page_start}–{c.page_end}
-            </Badge>
+            {c.page_start != null && c.page_end != null ? (
+              <Badge>
+                pages {c.page_start}–{c.page_end}
+              </Badge>
+            ) : null}
           </div>
           <div className="mt-2 text-sm leading-relaxed text-zinc-200">
-            {c.text_preview}
+            {c.text_preview || c.text || JSON.stringify(c)}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** A simple “pro” logo as inline SVG (no extra library needed) */
+function AppLogo() {
+  return (
+    <div className="h-11 w-11 rounded-2xl border border-zinc-800 bg-zinc-950/40 grid place-items-center shadow-sm">
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        className="text-zinc-100"
+        aria-hidden="true"
+      >
+        <path
+          d="M12 2l8.5 20h-2.6l-2-5H8.1l-2 5H3.5L12 2z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 14h6L12 6.5 9 14z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
     </div>
   );
 }
@@ -276,9 +357,51 @@ export default function App() {
 
   const [error, setError] = useState(null);
 
-  const canRunBase = Boolean(baseFile);
-  const canRunCompare = Boolean(compareFile);
+  // ====== Status chips state ======
+  const [backendOk, setBackendOk] = useState(null); // null=unknown, true=ok, false=down
   const canCompare = Boolean(base.uploadId && compare.uploadId);
+
+  const mode = canCompare ? "Compare" : "Single";
+  const uploadsReady = canCompare ? "Ready" : "Missing";
+
+  useEffect(() => {
+    let alive = true;
+
+    async function tick() {
+      try {
+        await pingHealth();
+        if (alive) setBackendOk(true);
+      } catch {
+        if (alive) setBackendOk(false);
+      }
+    }
+
+    tick();
+    const id = setInterval(tick, 4000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // ====== KPIs ======
+  const baseRevenue = base.metrics?.revenue;
+  const compareRevenue = compare.metrics?.revenue;
+
+  const revDelta =
+    typeof baseRevenue === "number" && typeof compareRevenue === "number"
+      ? compareRevenue - baseRevenue
+      : null;
+
+  const niDelta =
+    typeof variance?.net_income_change === "number"
+      ? variance.net_income_change
+      : null;
+
+  const explained =
+    typeof variance?.explained_pct === "number"
+      ? `${variance.explained_pct.toFixed(2)}% explained`
+      : "Run variance to compute";
 
   async function runPipeline(which) {
     setError(null);
@@ -349,17 +472,45 @@ export default function App() {
     return <Badge>{status}</Badge>;
   }
 
+  const canRunBase = Boolean(baseFile);
+  const canRunCompare = Boolean(compareFile);
+
+  const basePipelineLabel =
+    base.status === "uploading"
+      ? "Uploading…"
+      : base.status === "extracting"
+        ? "Extracting…"
+        : base.status === "metrics"
+          ? "Computing metrics…"
+          : "Extract metrics";
+
+  const comparePipelineLabel =
+    compare.status === "uploading"
+      ? "Uploading…"
+      : compare.status === "extracting"
+        ? "Extracting…"
+        : compare.status === "metrics"
+          ? "Computing metrics…"
+          : "Extract metrics";
+
+  // ====== Status chip tones ======
+  const backendTone =
+    backendOk == null ? "neutral" : backendOk ? "success" : "danger";
+  const backendText =
+    backendOk == null ? "Checking…" : backendOk ? "Connected" : "Down";
+
+  const modeTone = mode === "Compare" ? "info" : "neutral";
+  const uploadsTone = uploadsReady === "Ready" ? "success" : "warning";
+
   return (
     <div className="min-h-screen">
       {/* Top bar */}
       <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-white text-zinc-950 grid place-items-center font-black">
-              A
-            </div>
+          <div className="flex items-center gap-4">
+            <AppLogo />
             <div>
-              <div className="text-sm font-semibold">
+              <div className="text-sm font-semibold text-zinc-100">
                 AI Financial Report Analyst
               </div>
               <div className="text-xs text-zinc-400">
@@ -367,9 +518,20 @@ export default function App() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge tone="neutral">Frontend</Badge>
-            <Badge tone="info">Vite + Tailwind</Badge>
+
+          {/* ✅ Replaces “Hybrid / Finance+AI” with real status chips */}
+          <div className="hidden items-center gap-2 sm:flex">
+            <StatusChip
+              label="Backend"
+              value={backendText}
+              tone={backendTone}
+            />
+            <StatusChip label="Mode" value={mode} tone={modeTone} />
+            <StatusChip
+              label="Uploads"
+              value={uploadsReady}
+              tone={uploadsTone}
+            />
           </div>
         </div>
       </div>
@@ -385,11 +547,53 @@ export default function App() {
           </div>
         ) : null}
 
+        {/* KPI strip */}
+        {base.metrics || compare.metrics || variance ? (
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KPI
+              label="Base revenue"
+              value={formatNumber(baseRevenue)}
+              sub={base.uploadId ? "Extracted" : "—"}
+              tone={base.metrics ? "info" : "neutral"}
+            />
+            <KPI
+              label="Compare revenue"
+              value={formatNumber(compareRevenue)}
+              sub={compare.uploadId ? "Extracted" : "—"}
+              tone={compare.metrics ? "info" : "neutral"}
+            />
+            <KPI
+              label="Revenue delta"
+              value={revDelta == null ? "-" : formatNumber(revDelta)}
+              sub="Compare − Base"
+              tone={
+                revDelta == null
+                  ? "neutral"
+                  : revDelta >= 0
+                    ? "success"
+                    : "danger"
+              }
+            />
+            <KPI
+              label="Net income delta"
+              value={niDelta == null ? "-" : formatNumber(niDelta)}
+              sub={explained}
+              tone={
+                niDelta == null
+                  ? "neutral"
+                  : niDelta >= 0
+                    ? "success"
+                    : "danger"
+              }
+            />
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Base */}
           <Card
             title="Base period"
-            subtitle="Upload a PDF (e.g., FY24 Q4) and run extraction + metrics."
+            subtitle="Upload a PDF (e.g., FY24 Q4) and extract metrics."
             right={statusBadge(base.status)}
           >
             <div className="space-y-4">
@@ -416,7 +620,7 @@ export default function App() {
                     ["uploading", "extracting", "metrics"].includes(base.status)
                   }
                 >
-                  Run pipeline
+                  {basePipelineLabel}
                 </Button>
                 <Button
                   variant="secondary"
@@ -442,7 +646,7 @@ export default function App() {
           {/* Compare */}
           <Card
             title="Compare period"
-            subtitle="Upload the comparison PDF (e.g., FY25 Q4) and run extraction + metrics."
+            subtitle="Upload the comparison PDF (e.g., FY25 Q4) and extract metrics."
             right={statusBadge(compare.status)}
           >
             <div className="space-y-4">
@@ -471,7 +675,7 @@ export default function App() {
                     )
                   }
                 >
-                  Run pipeline
+                  {comparePipelineLabel}
                 </Button>
                 <Button
                   variant="secondary"
@@ -502,13 +706,13 @@ export default function App() {
         {/* Compare actions */}
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card
-            title="Compare & variance drivers"
-            subtitle="Compute drivers (revenue, margin, opex, other) and view breakdown."
+            title="Variance drivers"
+            subtitle="Compute drivers (revenue, margin, opex, other) and view the breakdown."
             right={
               canCompare ? (
                 <Badge tone="success">Ready</Badge>
               ) : (
-                <Badge tone="warning">Need IDs</Badge>
+                <Badge tone="warning">Upload both PDFs</Badge>
               )
             }
           >
@@ -520,14 +724,14 @@ export default function App() {
 
               <div className="flex gap-3">
                 <Button onClick={runVariance} disabled={!canCompare}>
-                  Run variance
+                  Compute variance
                 </Button>
               </div>
 
               {variance?.net_income_change != null ? (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold">
+                    <div className="text-sm font-semibold text-zinc-100">
                       Net income change
                     </div>
                     <Badge
@@ -540,7 +744,7 @@ export default function App() {
                         : "Decrease"}
                     </Badge>
                   </div>
-                  <div className="mt-2 text-2xl font-bold">
+                  <div className="mt-2 text-2xl font-bold text-zinc-100">
                     {formatNumber(variance.net_income_change)}
                   </div>
                   <div className="mt-1 text-xs text-zinc-400">
@@ -579,7 +783,7 @@ export default function App() {
 
           <Card
             title="Ask (numbers-first)"
-            subtitle="Ask a question; backend returns an auditable narrative + citations."
+            subtitle="Generate an auditable narrative + citations."
             right={
               canCompare ? (
                 <Badge tone="info">Compare mode</Badge>
@@ -602,7 +806,7 @@ export default function App() {
 
               <div className="flex gap-3">
                 <Button onClick={runAsk} disabled={!canCompare}>
-                  Ask
+                  Generate answer
                 </Button>
                 <Button
                   variant="ghost"
@@ -615,20 +819,24 @@ export default function App() {
                 </Button>
               </div>
 
+              <div className="text-xs text-zinc-500">
+                Output: narrative + key drivers + citations (auditable)
+              </div>
+
               {answer ? (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
                   <div className="text-xs font-semibold text-zinc-300">
                     Answer
                   </div>
-                  <pre className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">
+                  <pre className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-100 font-mono/90">
                     {answer}
                   </pre>
                 </div>
               ) : (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4 text-sm text-zinc-400">
-                  Ask will call <span className="text-zinc-200">/ask</span> with{" "}
+                  This calls <span className="text-zinc-200">/ask</span> with{" "}
                   <span className="text-zinc-200">compare_upload_id</span> and
-                  show citations below.
+                  shows citations below.
                 </div>
               )}
             </div>
@@ -648,8 +856,8 @@ export default function App() {
             <Citations citations={citations} />
             {!citations?.length ? (
               <div className="text-sm text-zinc-400">
-                Run <span className="text-zinc-200">Ask</span> to populate
-                citations.
+                Run <span className="text-zinc-200">Generate answer</span> to
+                populate citations.
               </div>
             ) : null}
           </Card>
