@@ -929,7 +929,7 @@ export default function App() {
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card
             title="Variance drivers"
-            subtitle="Compute drivers (revenue, margin, opex, other) and view the breakdown."
+            subtitle="Breaks net income change into operating vs below-the-line drivers. Compute drivers (revenue, margin, opex, other) and view the breakdown."
             right={
               canCompare ? (
                 <Badge tone="success">Ready</Badge>
