@@ -1,4 +1,6 @@
+// frontend/src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import ExecutiveSummary from "./ExecutiveSummary";
 
 /**
  * Demo Mode:
@@ -43,6 +45,19 @@ function Badge({ children, tone = "neutral" }) {
       )}
     >
       {children}
+    </span>
+  );
+}
+
+/* 👇 ADD THIS IMMEDIATELY BELOW Badge */
+
+function Tooltip({ label, children }) {
+  return (
+    <span className="relative group inline-flex items-center gap-1 cursor-help">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 -translate-x-1/2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 opacity-0 shadow-lg transition group-hover:opacity-100">
+        {label}
+      </span>
     </span>
   );
 }
@@ -301,8 +316,15 @@ function DriverTable({ variance }) {
           {list.map((d) => (
             <tr key={d.name} className="hover:bg-zinc-900/40">
               <td className="px-4 py-3 text-sm text-zinc-200">
-                {String(d.name).replaceAll("_", " ")}
+                {d.name === "other" ? (
+                  <Tooltip label="Includes taxes, interest, and other non-operating items below operating income.">
+                    <span>Other (below-the-line)</span>
+                  </Tooltip>
+                ) : (
+                  String(d.name).replaceAll("_", " ")
+                )}
               </td>
+
               <td className="px-4 py-3 text-right text-sm font-medium text-zinc-100">
                 {formatNumber(d.impact)}
               </td>
@@ -643,7 +665,7 @@ export default function App() {
         ? "Extracting…"
         : base.status === "metrics"
           ? "Computing metrics…"
-          : "Extract metrics";
+          : "Run analysis";
 
   const comparePipelineLabel =
     compare.status === "uploading"
@@ -652,7 +674,7 @@ export default function App() {
         ? "Extracting…"
         : compare.status === "metrics"
           ? "Computing metrics…"
-          : "Extract metrics";
+          : "Run analysis";
 
   const backendChipTone =
     backendOk == null ? "neutral" : backendOk ? "success" : "danger";
@@ -900,6 +922,9 @@ export default function App() {
           </Card>
         </div>
 
+        {/* Executive Summary */}
+        {variance && <ExecutiveSummary variance={variance} />}
+
         {/* Compare actions */}
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card
@@ -947,8 +972,11 @@ export default function App() {
                   <div className="mt-2 text-2xl font-bold text-zinc-100">
                     {formatNumber(variance.net_income_change)}
                   </div>
+
                   <div className="mt-1 text-xs text-zinc-400">
-                    Explained:{" "}
+                    <Tooltip label="Percentage of total net income change explained by identified variance drivers.">
+                      <span>Explained:</span>
+                    </Tooltip>{" "}
                     {typeof variance.explained_pct === "number"
                       ? `${variance.explained_pct.toFixed(2)}%`
                       : "-"}
@@ -1006,7 +1034,7 @@ export default function App() {
 
               <div className="flex gap-3">
                 <Button onClick={runAsk} disabled={!canCompare && !demoMode}>
-                  Generate answer
+                  Explain variance
                 </Button>
                 <Button
                   variant="ghost"
