@@ -42,6 +42,16 @@ def create_app() -> FastAPI:
     app.include_router(variance_router)
     app.include_router(ask_router)
 
+    @app.get("/")
+    def welcome():
+        return {
+        "message": "AI Financial Report Analyst API",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health"
+        }
+
+
     @app.api_route("/health", methods=["GET", "POST"])
     def health():
         return {"status": "ok", "app": settings.app_name, "env": settings.env}
