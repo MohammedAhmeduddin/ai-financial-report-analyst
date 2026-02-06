@@ -24,11 +24,13 @@ def create_app() -> FastAPI:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "https://ai-financial-report-analyst-fawn.vercel.app",
+        "https://ai-financial-report-analyst-18s9rcz3h.vercel.app",
         ],
-     allow_credentials=True,
-     allow_methods=["*"],
-     allow_headers=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
 )
+
 
 
     register_exception_handlers(app)
