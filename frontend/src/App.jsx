@@ -2,6 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ExecutiveSummary from "./ExecutiveSummary";
 
+/* ✅ ADD THIS */
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 /**
  * Demo Mode:
  * - Toggle in header
@@ -199,7 +202,7 @@ function KPI({ label, value, sub, tone = "neutral" }) {
 /** ---------- Backend helpers ---------- */
 
 async function postJSON(url, body) {
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${url}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
@@ -212,7 +215,8 @@ async function postJSON(url, body) {
 }
 
 async function postNoBody(url) {
-  const res = await fetch(url, { method: "POST" });
+  const res = await fetch(`${API_BASE}${url}`, { method: "POST" });
+
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${txt}`);
@@ -223,7 +227,8 @@ async function postNoBody(url) {
 async function uploadPDF(file) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch("/upload", { method: "POST", body: fd });
+  const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: fd });
+
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${txt}`);
@@ -518,7 +523,8 @@ export default function App() {
     async function ping() {
       try {
         // If your backend uses POST /health instead of GET, change method here.
-        const res = await fetch("/health", { method: "POST" });
+        const res = await fetch(`${API_BASE}/health`, { method: "POST" });
+
         if (!alive) return;
         setBackendOk(res.ok);
       } catch {

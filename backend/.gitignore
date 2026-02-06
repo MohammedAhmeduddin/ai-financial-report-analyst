@@ -22,3 +22,9 @@ venv/
 
 # App storage outputs
 storage/
+
+
+
+
+.env
+.env.local
