@@ -1,3 +1,4 @@
+# backend/app/api/ask.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -8,6 +9,8 @@ from app.services.parsing import load_extracted_pages
 from app.services.qa import answer_numbers_first, build_citations_for_keywords
 from app.services.variance import compute_variance_drivers
 from app.services.narrative import build_variance_narrative
+from app.services.llm import explain_variance
+
 
 router = APIRouter(tags=["ask"])
 
@@ -137,6 +140,21 @@ def ask(upload_id: str, req: AskRequest):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+
+    # ✅ LLM-powered explanation (numbers-first)
+    try:
+        llm_analysis = explain_variance(
+        variance=variance_result,
+        question=req.question,
+        )
+    except Exception:
+     # Safety fallback — never break the endpoint
+        llm_analysis = None
+
+
+
+
+
     # ✅ Build citations (income-statement specific keywords)
     # Keep these tight so citations come from the Statements of Operations.
     driver_keywords = [
@@ -177,6 +195,9 @@ def ask(upload_id: str, req: AskRequest):
     # Keep a cap so the response stays compact
     citations = citations_base[:5] + citations_compare[:5]
 
+
+
+
     return {
         "upload_id": upload_id,
         "compare_upload_id": compare_id,
@@ -194,5 +215,9 @@ def ask(upload_id: str, req: AskRequest):
         # new fields
         "variance": variance_result,
         "citations": citations,
-        "answer": narrative,
+        "answer": llm_analysis or narrative,
+
+
+        # ⭐ NEW: LLM analyst narrative
+        "llm_analysis": llm_analysis,
     }

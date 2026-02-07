@@ -1,9 +1,13 @@
+# backend/app/core/config.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     app_name: str = "AI Financial Report Analyst"
     env: str = "dev"
+
+    # ✅ ADD THIS (ONE LINE)
+    openai_api_key: str | None = None
 
     # storage
     storage_dir: str = "storage"

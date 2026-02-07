@@ -472,6 +472,10 @@ export default function App() {
   const [variance, setVariance] = useState(null);
   const [answer, setAnswer] = useState(null);
   const [citations, setCitations] = useState([]);
+  const [llmAnalysis, setLlmAnalysis] = useState(null);
+  const [showAI, setShowAI] = useState(false);
+  const [llmAnswer, setLlmAnswer] = useState("");
+  const [useAI, setUseAI] = useState(false);
 
   const [question, setQuestion] = useState(DEMO.question);
   const [error, setError] = useState(null);
@@ -631,14 +635,19 @@ export default function App() {
       // instant answer
       setError(null);
       setAnswer(DEMO.answer);
+      setLlmAnalysis(
+        "AI Analyst Commentary (demo):\n\nThis narrative adds qualitative interpretation on top of the deterministic variance explanation, highlighting strategic implications, sustainability of tax impacts, and analyst-style judgment.",
+      );
       setCitations(DEMO.citations);
       setVariance(DEMO.variance);
+      setShowAI(false);
       return;
     }
 
     setError(null);
     setAnswer(null);
     setCitations([]);
+    setShowAI(false); // 🔥 RESET TO DETERMINISTIC ON NEW ANSWER
 
     try {
       const payload = await postJSON(`/ask/${base.uploadId}`, {
@@ -648,6 +657,9 @@ export default function App() {
       setAnswer(payload.answer || "");
       setCitations(payload.citations || payload.evidence || []);
       setVariance(payload.variance || variance);
+      setLlmAnalysis(
+        payload.llm_analysis || `AI Analyst Commentary:\n\n${payload.answer}`,
+      );
     } catch (e) {
       setError(String(e?.message || e));
     }
@@ -1058,12 +1070,27 @@ export default function App() {
               </div>
 
               {answer ? (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                  {/* Toggle */}
+                  {typeof llmAnalysis === "string" &&
+                    llmAnalysis.length > 0 && (
+                      <Toggle
+                        enabled={showAI}
+                        onChange={setShowAI}
+                        label="AI analyst explanation"
+                      />
+                    )}
+
+                  {/* Label */}
                   <div className="text-xs font-semibold text-zinc-300">
-                    Answer
+                    {showAI
+                      ? "AI Analyst Commentary"
+                      : "Deterministic Explanation"}
                   </div>
-                  <pre className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-100 font-mono/90">
-                    {answer}
+
+                  {/* Content */}
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100 font-mono/90">
+                    {showAI ? llmAnalysis : answer}
                   </pre>
                 </div>
               ) : (
