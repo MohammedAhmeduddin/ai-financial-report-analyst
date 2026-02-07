@@ -123,26 +123,37 @@ Backend (FastAPI + Render)
 ### Backend
 
 ```bash
-
 cd backend
 python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
+```
 
-### Run tets:
+### Run Tests
+
+```bash
 pytest -q
+```
 
-### Start API:
+### Start API
+
+```bash
 uvicorn app.main:app --reload
+```
 
-### Swagger UI:
-http://127.0.0.1:8000/docs
+### Swagger UI
 
+    http://127.0.0.1:8000/docs
 
-### 🔑 Environment Variables
-Backend (.env)
+---
+
+## 🔑 Environment Variables
+
+### Backend (`.env`)
+
+```env
 APP_NAME="AI Financial Report Analyst"
 ENV="dev"
 
@@ -155,83 +166,169 @@ CHUNKS_DIR="storage/chunks"
 
 MAX_UPLOAD_MB=50
 LOG_LEVEL="INFO"
+```
 
-⚠️ The application runs without OpenAI.
-AI commentary is automatically disabled if OPENAI_API_KEY is not set.
+⚠️ **Note:**\
+The application runs without OpenAI.\
+AI commentary is automatically disabled if `OPENAI_API_KEY` is not set.
 
-### 🧠 End-to-End Usage Flow
-Rule
-- Base = older period (e.g., FY24)
-- Compare = newer period (e.g., FY25)
+---
+
+## 🧠 End-to-End Usage Flow
+
+### Rule
+
+- **Base** = older period (e.g., FY24)\
+- **Compare** = newer period (e.g., FY25)
+
+---
 
 ### 1️⃣ Upload PDFs
-POST /upload
 
-Upload both:
-- FY24 → save BASE_ID
-- FY25 → save COMPARE_ID
+    POST /upload
 
+Upload both: - FY24 → save `BASE_ID` - FY25 → save `COMPARE_ID`
+
+---
 
 ### 2️⃣ Extract Text
-POST /extract/{upload_id}
+
+    POST /extract/{upload_id}
 
 Run for both uploads.
 
+---
 
 ### 3️⃣ Extract Metrics
-POST /metrics/{upload_id}
+
+    POST /metrics/{upload_id}
 
 Run for both uploads.
 
-### 4️⃣ Compute Variance
-POST /variance/{BASE_ID}/{COMPARE_ID}
+---
 
+### 4️⃣ Compute Variance
+
+    POST /variance/{BASE_ID}/{COMPARE_ID}
+
+---
 
 ### 5️⃣ Ask a Question (Compare Mode)
-POST /ask/{BASE_ID}
 
-Body:
+    POST /ask/{BASE_ID}
+
+#### Request Body
+
+```json
 {
   "question": "Why did net income change?",
   "compare_upload_id": "COMPARE_ID"
 }
+```
 
-Response includes:
-- variance drivers
-- deterministic narrative
-- AI analyst commentary (if enabled)
-- citations
+#### Response Includes
 
-### 🌐 Production Deployment
-Frontend
-- Hosted on Vercel
-- Live URL: https://ai-financial-report-analyst-fawn.vercel.app
+- Variance drivers\
+- Deterministic narrative\
+- AI analyst commentary _(if enabled)_\
+- Citations
 
+---
+
+## 🌐 Production Deployment
+
+### Frontend
+
+- Hosted on **Vercel**
+- Live URL:\
+  👉 https://ai-financial-report-analyst-fawn.vercel.app
 
 ### Backend
-- Hosted on Render
+
+- Hosted on **Render**
 - Uses environment variables for secrets
-- Free tier supported (cold-start safe)
+- Free tier supported _(cold-start safe)_
 
+---
 
-### 🎯 Why This Project Stands Out
+## 🎯 Why This Project Stands Out
 
-- Not a chatbot — a financial analysis engine
-- Deterministic + AI hybrid (enterprise pattern)
-- Fully auditable and citation-driven
-- Designed for real financial workflows
-- Clean separation of logic, AI, and UI
+- Not a chatbot --- a financial analysis engine\
+- Deterministic + AI hybrid _(enterprise-grade pattern)_\
+- Fully auditable and citation-driven\
+- Designed for real financial workflows\
+- Clean separation of logic, AI, and UI\
 - Production-safe by default
 
+---
 
-### 📌 Future Enhancements
-- Improve AI / deterministic toggle UX
-- Support cash flow & balance sheet variance
-- Multi-period trend analysis
-- Export analyst reports (PDF)
+## 🧠 Key Engineering Learnings
+
+Building this system required designing and shipping a production-grade
+AI application, not a prototype. The work emphasized correctness,
+explainability, and operational safety --- especially important in
+financial and enterprise contexts.
+
+### Key Takeaways
+
+#### Designing hybrid AI systems (deterministic + LLM)
+
+Implemented a numbers-first architecture where deterministic financial
+logic computes results and LLMs provide optional, constrained
+interpretation --- avoiding hallucinations and preserving auditability.
+
+#### Applying Retrieval-Augmented Generation (RAG) with strict grounding
+
+Built document-grounded AI responses using citation-based retrieval,
+including heuristic filtering to exclude non-relevant financial
+statements (e.g., cash flow and balance sheet) from analytical
+explanations.
+
+#### Enterprise-safe AI integration patterns
+
+Designed AI features that degrade gracefully: - Core functionality
+remains fully operational without an API key - LLM usage is isolated
+behind service boundaries - Failures never break critical analysis
+workflows
+
+#### Financial variance analysis at scale
+
+Implemented deterministic variance decomposition aligned with real
+analyst workflows, ensuring full reconciliation, zero residuals, and
+traceable driver attribution.
+
+#### Backend system design and API hygiene
+
+Structured a FastAPI backend with clear separation of concerns across
+ingestion, parsing, analytics, retrieval, and AI services --- improving
+testability and maintainability.
+
+#### Production deployment and configuration management
+
+Deployed a multi-service architecture using environment-based
+configuration, secrets management, and cold-start-safe initialization
+suitable for cloud platforms.
+
+#### Explainability as a first-class requirement
+
+Treated explainability and traceability as core system constraints, not
+optional features --- aligning the system with enterprise compliance and
+review expectations.
+
+---
+
+## 📌 Future Enhancements
+
+- Improve AI / deterministic toggle UX\
+- Support cash flow & balance sheet variance\
+- Multi-period trend analysis\
+- Export analyst reports (PDF)\
 - Role-based access (enterprise)
 
+---
 
-Built by Ahmeduddin Mohammed
-Focused on AI systems, data engineering, and applied financial intelligence.
-```
+## 👨‍💻 Author
+
+**Ahmeduddin Mohammed**\
+Focused on AI systems, data engineering, and applied financial
+intelligence.
